@@ -1,0 +1,51 @@
+name: Sample - Application Installation
+ 
+on:
+  workflow_dispatch:
+    inputs:
+      env_code:
+        description: 'Environment code'
+        required: true
+        default: 'prod'
+ 
+jobs:
+  install-app:
+    runs-on: ubuntu-latest
+   
+    steps:
+      - uses: actions/checkout@v4
+     
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+     
+      - name: Install ppd
+        run: pip install -e .
+     
+      - name: Setup environment
+        run: |
+          mkdir -p /tmp/ppd/{work,logs,install,artifacts}
+          echo "WORK_DIR=/tmp/ppd/work" >> $GITHUB_ENV
+          echo "LOG_DIR=/tmp/ppd/logs" >> $GITHUB_ENV
+     
+      - name: Install Portfolio+
+        run: |
+          ppd app install \
+            --env-code ${{ inputs.env_code }} \
+            --install-dir /tmp/ppd/install \
+            --core-package artifacts/pplus-core-20.1.0.zip \
+            --site-package artifacts/pplus-site-20.1.0.zip \
+            --pparms-package artifacts/pparms-prod.zip \
+            --license-package artifacts/license.zip
+     
+      - name: Verify installation
+        run: ls -la /tmp/ppd/install
+     
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-logs
+          path: /tmp/ppd/logs/
