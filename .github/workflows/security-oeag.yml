@@ -1,0 +1,65 @@
+name: Sample - Enable OEAG Security
+ 
+on:
+  workflow_dispatch:
+    inputs:
+      oeag_url:
+        description: 'OEAG URL'
+        required: true
+        default: 'https://oeag-host:8443'
+ 
+jobs:
+  enable-oeag:
+    runs-on: ubuntu-latest
+   
+    steps:
+      - uses: actions/checkout@v4
+     
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+     
+      - name: Install ppd
+        run: pip install -e .
+     
+      - name: Setup environment
+        run: |
+          mkdir -p /tmp/ppd/{work,logs,config}
+          echo "WORK_DIR=/tmp/ppd/work" >> $GITHUB_ENV
+          echo "LOG_DIR=/tmp/ppd/logs" >> $GITHUB_ENV
+     
+      - name: Generate domain keys
+        run: |
+          ppd security generate-domainsks \
+            --file /tmp/ppd/config/domains.csv \
+            --entropy 32
+     
+      - name: Load domains
+        run: |
+          ppd db load-domains \
+            --domain-file /tmp/ppd/config/domains.csv \
+            --db-path /tmp/ppd/data/pmprod \
+            --parameter-file config/pmprod.pf \
+            -o /tmp/ppd/logs/loaddomains.log
+     
+      - name: Enable OEAG
+        run: |
+          ppd security enable-oeag \
+            --oeag-url ${{ inputs.oeag_url }} \
+            --db-path /tmp/ppd/data/pmprod \
+            --parameter-file config/pmprod.pf \
+            -o /tmp/ppd/logs/enableoeag.log
+     
+      - name: Check OEAG status
+        run: ppd security check-oeag --db-path /tmp/ppd/data/pmprod
+     
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oeag-artifacts
+          path: |
+            /tmp/ppd/logs/
+            /tmp/ppd/config/domains.csv
