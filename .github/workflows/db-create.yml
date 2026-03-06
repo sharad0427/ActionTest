@@ -1,4 +1,4 @@
-name: Sample - Database Creation.
+name: Sample - Database Creation
  
 on:
   workflow_dispatch:
