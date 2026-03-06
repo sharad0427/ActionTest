@@ -1,0 +1,59 @@
+name: Sample - Application Upgrade
+ 
+on:
+  workflow_dispatch:
+    inputs:
+      perform_upgrade:
+        description: 'Actually perform upgrade (stage only if false)'
+        type: boolean
+        default: false
+ 
+jobs:
+  upgrade-app:
+    runs-on: ubuntu-latest
+   
+    steps:
+      - uses: actions/checkout@v4
+     
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+     
+      - name: Install ppd
+        run: pip install -e .
+     
+      - name: Setup environment
+        run: |
+          mkdir -p /tmp/ppd/{work,logs,install,upgrade}
+          echo "WORK_DIR=/tmp/ppd/work" >> $GITHUB_ENV
+          echo "LOG_DIR=/tmp/ppd/logs" >> $GITHUB_ENV
+          echo "US_WORK_DIR=/tmp/ppd/work" >> $GITHUB_ENV
+     
+      - name: Stage upgrade
+        run: |
+          ppd app upgrade \
+            --env-code prod \
+            --current-install-dir /tmp/ppd/install \
+            --upgrade-dir /tmp/ppd/upgrade \
+            --core-package artifacts/pplus-core-20.2.0.zip \
+            --site-package artifacts/pplus-site-20.2.0.zip \
+            --pparms-package artifacts/pparms-prod.zip \
+            --license-package artifacts/license.zip \
+            ${{ inputs.perform_upgrade && '--perform-upgrade --pm-db-path /tmp/ppd/data/pmprod --parameter-file config/pmprod.pf' || '' }}
+     
+      - name: Run upgrade utilities
+        if: inputs.perform_upgrade
+        run: |
+          ppd app run-upgrade-utilities \
+            --env-code prod \
+            --install-dir /tmp/ppd/install \
+            --upgrade-package artifacts/upgrade-utilities-20.2.0.zip
+     
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upgrade-logs
+          path: /tmp/ppd/logs/
