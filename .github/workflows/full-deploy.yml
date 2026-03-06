@@ -1,0 +1,87 @@
+name: Sample - Full Deployment Pipeline
+ 
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+ 
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+   
+    steps:
+      - uses: actions/checkout@v4
+     
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+     
+      - name: Install ppd
+        run: pip install -e .
+     
+      - name: Setup environment
+        run: |
+          mkdir -p /tmp/ppd/{work,logs,data,install,schema,config,backup}
+          echo "WORK_DIR=/tmp/ppd/work" >> $GITHUB_ENV
+          echo "LOG_DIR=/tmp/ppd/logs" >> $GITHUB_ENV
+          echo "US_WORK_DIR=/tmp/ppd/work" >> $GITHUB_ENV
+     
+      - name: Create databases
+        run: |
+          for db in pmprod pmarch pmrpt; do
+            ppd db create \
+              --db-path /tmp/ppd/data/$db \
+              --schema-file schema/$db.df \
+              --structure-file schema/$db.st \
+              -o /tmp/ppd/logs/create-$db.log
+          done
+     
+      - name: Configure security
+        run: |
+          ppd security generate-domainsks \
+            --file /tmp/ppd/config/domains.csv \
+            --entropy 32
+         
+          ppd security apply-db-security \
+            --pplus-dir /tmp/ppd/install \
+            --db-list "/tmp/ppd/data/pmprod,/tmp/ppd/data/pmarch" \
+            --domain-parameter-file /tmp/ppd/config/domains.csv \
+            --login-user LOGINUSER \
+            --parameter-file config/pmprod.pf
+     
+      - name: Install application
+        run: |
+          ppd app install \
+            --env-code ${{ inputs.environment }} \
+            --install-dir /tmp/ppd/install \
+            --core-package artifacts/pplus-core.zip \
+            --site-package artifacts/pplus-site.zip \
+            --pparms-package artifacts/pparms-${{ inputs.environment }}.zip \
+            --license-package artifacts/license.zip
+     
+      - name: Deployment summary
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Environment: ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Databases created: pmprod, pmarch, pmrpt" >> $GITHUB_STEP_SUMMARY
+          echo "- Security configured: OEAG domains" >> $GITHUB_STEP_SUMMARY
+          echo "- Application installed: Portfolio+" >> $GITHUB_STEP_SUMMARY
+     
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-artifacts-${{ inputs.environment }}
+          path: |
+            /tmp/ppd/logs/
+            /tmp/ppd/config/
