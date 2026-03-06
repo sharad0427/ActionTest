@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        db_name: ${{ split(inputs.db_names, ',') }}
+        db_name: ${{ fromJson(format('["{0}"]', join(split(inputs.db_names, ','), '","'))) }}
 
     steps:
       - name: Checkout repository
@@ -32,11 +32,7 @@ jobs:
 
       - name: Setup environment
         run: |
-          mkdir -p /tmp/ppd/work
-          mkdir -p /tmp/ppd/logs
-          mkdir -p /tmp/ppd/data
-          mkdir -p /tmp/ppd/schema
-
+          mkdir -p /tmp/ppd/work /tmp/ppd/logs /tmp/ppd/data /tmp/ppd/schema
           echo "WORK_DIR=/tmp/ppd/work" >> $GITHUB_ENV
           echo "LOG_DIR=/tmp/ppd/logs" >> $GITHUB_ENV
 
