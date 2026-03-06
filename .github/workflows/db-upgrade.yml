@@ -1,0 +1,48 @@
+name: Sample - Database Schema Upgrade
+ 
+on:
+  workflow_dispatch:
+    inputs:
+      perform_upgrade:
+        description: 'Actually perform upgrade (dry-run if false)'
+        type: boolean
+        default: false
+ 
+jobs:
+  upgrade-schema:
+    runs-on: ubuntu-latest
+   
+    steps:
+      - uses: actions/checkout@v4
+     
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+     
+      - name: Install ppd
+        run: pip install -e .
+     
+      - name: Setup environment
+        run: |
+          mkdir -p /tmp/ppd/{work,logs,data,schema,backup}
+          echo "WORK_DIR=/tmp/ppd/work" >> $GITHUB_ENV
+          echo "LOG_DIR=/tmp/ppd/logs" >> $GITHUB_ENV
+          echo "US_WORK_DIR=/tmp/ppd/work" >> $GITHUB_ENV
+     
+      - name: Upgrade database schema
+        run: |
+          ppd db upgrade-schema \
+            --db-path /tmp/ppd/data/pmprod \
+            --schema-file /tmp/ppd/schema/pmprod-new.df \
+            --parameter-file config/pmprod.pf \
+            ${{ inputs.perform_upgrade && '--perform-upgrade' || '' }} \
+            -o /tmp/ppd/logs/upgrade-schema.log
+     
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upgrade-logs
+          path: /tmp/ppd/logs/
