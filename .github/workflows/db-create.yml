@@ -1,0 +1,59 @@
+name: Sample - Database Creation
+ 
+on:
+  workflow_dispatch:
+    inputs:
+      db_name:
+        description: 'Database name'
+        required: true
+        default: 'pmprod'
+ 
+jobs:
+  create-database:
+    runs-on: ubuntu-latest
+   
+    steps:
+      - uses: actions/checkout@v4
+     
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+     
+      - name: Install ppd
+        run: pip install -e .
+     
+      - name: Setup environment
+        run: |
+          mkdir -p /tmp/ppd/{work,logs,data,schema}
+          echo "WORK_DIR=/tmp/ppd/work" >> $GITHUB_ENV
+          echo "LOG_DIR=/tmp/ppd/logs" >> $GITHUB_ENV
+     
+      - name: Sanitize schema
+        run: |
+          ppd db sanitize-df \
+            --input-schema schema/${{ inputs.db_name }}.df \
+            --output-schema /tmp/ppd/schema/${{ inputs.db_name }}.sanitized.df
+     
+      - name: Create database
+        run: |
+          ppd db create \
+            --db-path /tmp/ppd/data/${{ inputs.db_name }} \
+            --schema-file /tmp/ppd/schema/${{ inputs.db_name }}.sanitized.df \
+            --structure-file schema/${{ inputs.db_name }}.st \
+            -o /tmp/ppd/logs/create.log
+     
+      - name: Load seed data
+        run: |
+          ppd db load-data \
+            --data-file data/${{ inputs.db_name }} \
+            --db-path /tmp/ppd/data/${{ inputs.db_name }} \
+            -o /tmp/ppd/logs/loaddata.log
+     
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-logs
+          path: /tmp/ppd/logs/
