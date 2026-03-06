@@ -6,7 +6,13 @@ on:
       env_code:
         description: 'Environment code'
         required: true
-        default: 'prod'
+        type: choice
+        options:
+          - dev
+          - uat
+          - staging
+          - prod
+        default: 'dev'
  
 jobs:
   install-app:
